@@ -20,8 +20,6 @@ Lee un Excel con cursos y profesores (`datos_varas.xlsx`) y busca una asignació
 | `horario_roles_auditado.xlsx` | Horario con roles de inscripción (obligatorio / electivo) |
 | `malla_ICF_innovada.xlsx` | Malla curricular de referencia |
 
-> Los archivos Excel **no se incluyen en el repositorio** por contener datos institucionales.
-
 ## Instalación
 
 ```bash
