@@ -1,0 +1,7 @@
+# Base de datos local — cada usuario crea la suya
+tesis_planificacion.db
+
+# Archivos temporales de Python
+__pycache__/
+*.pyc
+.venv/
