@@ -157,8 +157,8 @@ def main():
 
         # Por ahora mostramos un mensaje temporal hasta crear cada panel
         if perfil == "secretario":
-            st.title("🗂️ Panel del Secretario Académico")
-            st.info("Panel en construcción — próximo paso.")
+            from pages import secretario
+            secretario.render()
         elif perfil == "profesor":
             st.title("👨‍🏫 Panel del Profesor")
             st.info("Panel en construcción — próximo paso.")
