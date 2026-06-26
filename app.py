@@ -160,8 +160,8 @@ def main():
             from pages import secretario
             secretario.render()
         elif perfil == "profesor":
-            st.title("👨‍🏫 Panel del Profesor")
-            st.info("Panel en construcción — próximo paso.")
+            from pages import profesor
+            profesor.render()
         elif perfil == "estudiante":
             st.title("🎓 Panel del Estudiante")
             st.info("Panel en construcción — próximo paso.")
