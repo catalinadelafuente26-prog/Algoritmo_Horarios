@@ -43,11 +43,17 @@ def _tab_generar():
 
     col1, col2 = st.columns(2)
     with col1:
-        generaciones = st.slider("Generaciones del algoritmo", 100, 500, 250, 50)
+        generaciones = st.slider("Generaciones del algoritmo", 100, 1000, 350, 50)
     with col2:
-        poblacion = st.slider("Tamaño de población", 20, 100, 50, 10)
+        poblacion = st.slider("Tamaño de población", 20, 100, 80, 10)
 
     nombre_horario = st.text_input("Nombre para identificar este horario", value="Semestre 2026-20")
+
+    modo = st.radio(
+        "¿Qué datos usar para generar el horario?",
+        ["📄 Desde Excel existente", "📚 Desde Malla Curricular (generar desde cero)"],
+        horizontal=True
+    )
 
     if st.button("🚀 Ejecutar Optimizador", type="primary"):
         # Verificar que el archivo existe
@@ -62,18 +68,114 @@ def _tab_generar():
             os.path.join(os.path.dirname(os.path.dirname(__file__)), "algoritmo_horarios.py")
         )
 
-        with st.spinner("Cargando datos desde Excel..."):
-            # Usamos el módulo base directamente
-            import algoritmo_horarios as ga
-            ga.cursos_reales.clear()
-            ga.profesores_reales.clear()
-            ga.cargar_datos_desde_excel(ruta_excel)
+        import main as ga
+        ga.cursos_reales.clear()
+        ga.profesores_reales.clear()
 
-        if not ga.cursos_reales:
-            st.error("No se pudieron cargar cursos. Revisa el archivo Excel.")
-            return
+        if modo == "📄 Desde Excel existente":
+            # Modo original — leer desde el Excel
+            with st.spinner("Cargando datos desde Excel..."):
+                ga.cargar_datos_desde_excel(ruta_excel)
 
-        st.success(f"✓ {len(ga.cursos_reales)} cursos cargados.")
+            if not ga.cursos_reales:
+                st.error("No se pudieron cargar cursos. Revisa el archivo Excel.")
+                return
+            st.success(f"✓ {len(ga.cursos_reales)} cursos cargados desde Excel.")
+
+        else:
+            # Modo malla — generar cursos desde malla.py con profesores de la BD
+            with st.spinner("Generando cursos desde la malla curricular..."):
+                from malla import MALLA_ICF
+
+                profesores_bd = db.obtener_profesores()
+                if not profesores_bd:
+                    st.error("No hay profesores en la base de datos. Importa los profesores primero.")
+                    return
+
+                import itertools
+                rotacion = itertools.cycle(profesores_bd)
+                nrc_base = 90000
+
+                def horas_a_bloques(horas):
+                    """Convierte horas a bloques de 45 min, mínimo 2."""
+                    if horas <= 0:
+                        return 0
+                    # Redondeamos hacia arriba para no perder horas
+                    import math
+                    return max(2, math.ceil(horas / 0.75))
+
+                def calcular_chunks_componente(horas, tipo):
+                    """
+                    Decide cómo distribuir los bloques según el tipo de componente.
+                    - catedra:    si son <= 2 bloques → 1 día. Si son más → de a 2 por día.
+                    - ayudantia:  siempre 1 día de corrido.
+                    - lab:        siempre 1 día de corrido.
+                    """
+                    total = horas_a_bloques(horas)
+                    if total == 0:
+                        return []
+
+                    if tipo in ("ayudantia", "lab"):
+                        # Siempre un solo día, todos los bloques juntos
+                        return [total]
+                    else:
+                        # Cátedra: si cabe en 2 bloques → 1 día
+                        if total <= 2:
+                            return [total]
+                        else:
+                            # Repartir en sesiones de exactamente 2 bloques por día
+                            n_dias = total // 2
+                            chunks = [2] * n_dias
+                            # Si sobra 1 bloque lo agregamos al último día
+                            if total % 2 != 0:
+                                chunks[-1] += 1
+                            return chunks
+
+                nrc_contador = nrc_base
+                cursos_generados = 0
+
+                for ramo in MALLA_ICF:
+                    profe      = next(rotacion)
+                    rut        = str(profe["rut"]).strip()
+                    nom        = str(profe["nombre"]).strip()
+
+                    # Registrar profesor en el módulo GA
+                    if rut not in ga.profesores_reales:
+                        ga.profesores_reales[rut] = ga.Profesor(rut, nom)
+
+                    # Crear un NRC por cada componente que tenga horas > 0
+                    componentes = [
+                        ("catedra",   ramo["horas_catedral"],   f"{ramo['nombre']} (Cátedra)"),
+                        ("ayudantia", ramo["horas_ayudantia"],  f"{ramo['nombre']} (Ayudantía)"),
+                        ("lab",       ramo["horas_lab"],        f"{ramo['nombre']} (Lab)"),
+                    ]
+
+                    for tipo, horas, nombre_comp in componentes:
+                        if horas <= 0:
+                            continue
+
+                        chunks = calcular_chunks_componente(horas, tipo)
+                        total_bloques = sum(chunks)
+
+                        curso = ga.Curso(
+                            nrc_contador,
+                            nombre_comp,
+                            rut,
+                            nom,
+                            f"VIRTUAL_{nrc_contador}",
+                            ramo["semestre"],
+                            "OBLIGATORIO",
+                            []
+                        )
+                        curso.duracion_requerida = total_bloques
+                        # Labs y ayudantías siempre van en un solo día
+                        curso.un_solo_dia = (tipo in ("lab", "ayudantia"))
+                        
+                        ga.cursos_reales[nrc_contador] = curso
+                        nrc_contador += 1
+                        cursos_generados += 1
+
+            st.success(f"✓ {cursos_generados} componentes generados desde la malla curricular.")
 
         # Barra de progreso
         progress = st.progress(0)

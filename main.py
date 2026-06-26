@@ -76,6 +76,8 @@ class Curso:
         # Si no tenemos horario de referencia asumimos 2 bloques (lo más común)
         self.duracion_requerida = len(self.bloques_enteros) if self.bloques_enteros else 2
 
+        self.un_solo_dia = False  # True para labs y ayudantías
+
 class Profesor:
     def __init__(self, rut, nombre):
         self.rut    = rut
@@ -224,9 +226,16 @@ def calcular_chunks(duracion_requerida: int) -> list[int]:
             temp -= 1
     return chunks
 
-def generar_bloques_al_azar(duracion_requerida: int) -> list[int]:
+def generar_bloques_al_azar(duracion_requerida: int, un_solo_dia: bool = False) -> list[int]:
+    if un_solo_dia:
+        # Todo en un mismo día de corrido
+        dia       = random.randint(0, 5)
+        block_max = BLOQUES_POR_DIA - duracion_requerida
+        inicio    = random.randint(0, max(0, block_max))
+        return [(dia * BLOQUES_POR_DIA) + inicio + i for i in range(duracion_requerida)]
+
     chunks        = calcular_chunks(duracion_requerida)
-    dias_elegidos = random.sample(range(6), len(chunks))  # un día distinto por chunk
+    dias_elegidos = random.sample(range(6), min(len(chunks), 6))
     bloques       = []
 
     for dia, size in zip(dias_elegidos, chunks):
@@ -388,6 +397,24 @@ def mutacion_inteligente_dirigida(horario: dict, nrcs_malos: set, prob: float) -
         dias_disponibles = list(range(6))
         random.shuffle(dias_disponibles)
 
+        # Si el curso debe ir en un solo día, forzamos 1 solo chunk
+        if getattr(c, 'un_solo_dia', False):
+            for dia in dias_disponibles:
+                block_max = BLOQUES_POR_DIA - c.duracion_requerida
+                if block_max < 0:
+                    continue
+                inicio = random.randint(0, block_max)
+                ventana = [(dia * BLOQUES_POR_DIA) + inicio + i for i in range(c.duracion_requerida)]
+                c_prof = any((c.rut_profesor, b) in o_prof for b in ventana)
+                c_sala = any((c.sala, b) in o_sala for b in ventana)
+                if not c_prof and not c_sala:
+                    c.bloques_enteros = ventana
+                    for b in ventana:
+                        o_prof.add((c.rut_profesor, b))
+                        o_sala.add((c.sala, b))
+                    break
+            continue  # saltar el resto de la mutación para este curso
+
         nuevos_bloques = []
         dias_usados    = []
         exito_total    = True
@@ -455,7 +482,7 @@ def mutacion_inteligente_dirigida(horario: dict, nrcs_malos: set, prob: float) -
 def crear_individuo() -> dict:
     ind = copy.deepcopy(cursos_reales)
     for c in ind.values():
-        c.bloques_enteros = generar_bloques_al_azar(c.duracion_requerida)
+        c.bloques_enteros = generar_bloques_al_azar(c.duracion_requerida, c.un_solo_dia)
     return ind
 
 # -----------------------------------------------------------------------
