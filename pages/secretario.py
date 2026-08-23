@@ -2,6 +2,7 @@
 pages/secretario.py
 Panel del Secretario Académico.
 Funciones: generar horario, ver y editar, gestionar profesores, alertas.
+iniciar con streamlit run app.py 
 """
 import streamlit as st
 import pandas as pd
@@ -92,62 +93,66 @@ def _tab_generar():
                     st.error("No hay profesores en la base de datos. Importa los profesores primero.")
                     return
 
-                import itertools
-                rotacion = itertools.cycle(profesores_bd)
                 nrc_base = 90000
+                nrc_contador = nrc_base
+                cursos_generados = 0
+                ramos_sin_profesor = []
+
+                # Construir índice: nombre_asig → lista de profesores habilitados
+                indice_habilitados = {}
+                for prof in profesores_bd:
+                    asigs = db.obtener_asignaturas_profesor(prof["id"])
+                    for asig in asigs:
+                        clave = asig.strip().upper()
+                        if clave not in indice_habilitados:
+                            indice_habilitados[clave] = []
+                        indice_habilitados[clave].append(prof)
 
                 def horas_a_bloques(horas):
-                    """Convierte horas a bloques de 45 min, mínimo 2."""
                     if horas <= 0:
                         return 0
-                    # Redondeamos hacia arriba para no perder horas
                     import math
                     return max(2, math.ceil(horas / 0.75))
 
                 def calcular_chunks_componente(horas, tipo):
-                    """
-                    Decide cómo distribuir los bloques según el tipo de componente.
-                    - catedra:    si son <= 2 bloques → 1 día. Si son más → de a 2 por día.
-                    - ayudantia:  siempre 1 día de corrido.
-                    - lab:        siempre 1 día de corrido.
-                    """
                     total = horas_a_bloques(horas)
                     if total == 0:
                         return []
-
                     if tipo in ("ayudantia", "lab"):
-                        # Siempre un solo día, todos los bloques juntos
                         return [total]
                     else:
-                        # Cátedra: si cabe en 2 bloques → 1 día
                         if total <= 2:
                             return [total]
                         else:
-                            # Repartir en sesiones de exactamente 2 bloques por día
                             n_dias = total // 2
                             chunks = [2] * n_dias
-                            # Si sobra 1 bloque lo agregamos al último día
                             if total % 2 != 0:
                                 chunks[-1] += 1
                             return chunks
 
-                nrc_contador = nrc_base
-                cursos_generados = 0
+                # Rotación por ramo para distribuir carga entre habilitados
+                rotacion_por_ramo = {}
 
                 for ramo in MALLA_ICF:
-                    profe      = next(rotacion)
-                    rut        = str(profe["rut"]).strip()
-                    nom        = str(profe["nombre"]).strip()
+                    nombre_ramo = ramo["nombre"].strip().upper()
 
-                    # Registrar profesor en el módulo GA
-                    if rut not in ga.profesores_reales:
-                        ga.profesores_reales[rut] = ga.Profesor(rut, nom)
+                    # Buscar profesores habilitados para este ramo
+                    habilitados = indice_habilitados.get(nombre_ramo, [])
 
-                    # Crear un NRC por cada componente que tenga horas > 0
+                    if not habilitados:
+                        ramos_sin_profesor.append(ramo["nombre"])
+                        # Fallback: usar cualquier profesor disponible
+                        habilitados = profesores_bd
+
+                    # Inicializar rotación para este ramo
+                    if nombre_ramo not in rotacion_por_ramo:
+                        import itertools
+                        rotacion_por_ramo[nombre_ramo] = itertools.cycle(habilitados)
+
                     componentes = [
-                        ("catedra",   ramo["horas_catedral"],   f"{ramo['nombre']} (Cátedra)"),
-                        ("ayudantia", ramo["horas_ayudantia"],  f"{ramo['nombre']} (Ayudantía)"),
-                        ("lab",       ramo["horas_lab"],        f"{ramo['nombre']} (Lab)"),
+                        ("catedral",  ramo["horas_catedral"],  f"{ramo['nombre']} (Cátedra)"),
+                        ("ayudantia", ramo["horas_ayudantia"], f"{ramo['nombre']} (Ayudantía)"),
+                        ("lab",       ramo["horas_lab"],       f"{ramo['nombre']} (Lab)"),
                     ]
 
                     for tipo, horas, nombre_comp in componentes:
@@ -156,6 +161,11 @@ def _tab_generar():
 
                         chunks = calcular_chunks_componente(horas, tipo)
                         total_bloques = sum(chunks)
+
+                        # Asignar el siguiente profesor habilitado en rotación
+                        profe = next(rotacion_por_ramo[nombre_ramo])
+                        rut   = str(profe["rut"]).strip()
+                        nom   = str(profe["nombre"]).strip()
 
                         curso = ga.Curso(
                             nrc_contador,
@@ -168,12 +178,19 @@ def _tab_generar():
                             []
                         )
                         curso.duracion_requerida = total_bloques
-                        # Labs y ayudantías siempre van en un solo día
                         curso.un_solo_dia = (tipo in ("lab", "ayudantia"))
-                        
+
+                        if rut not in ga.profesores_reales:
+                            ga.profesores_reales[rut] = ga.Profesor(rut, nom)
+
                         ga.cursos_reales[nrc_contador] = curso
                         nrc_contador += 1
                         cursos_generados += 1
+
+            if ramos_sin_profesor:
+                st.warning(f"⚠️ {len(ramos_sin_profesor)} ramo(s) sin profesor habilitado (se usó fallback): {', '.join(ramos_sin_profesor)}")
+
+            st.success(f"✓ {cursos_generados} componentes generados desde la malla curricular con profesores habilitados.")
 
             st.success(f"✓ {cursos_generados} componentes generados desde la malla curricular.")
 

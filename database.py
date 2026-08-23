@@ -322,6 +322,21 @@ def resolver_alerta(alerta_id):
             "UPDATE alertas SET resuelta=1 WHERE id=?", (alerta_id,)
         )
 
+def asignar_asignatura_profesor(profesor_id, nombre_asig):
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO profesor_asignaturas(profesor_id, nombre_asig) VALUES (?,?)",
+            (profesor_id, nombre_asig)
+        )
+
+def obtener_asignaturas_profesor(profesor_id):
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT nombre_asig FROM profesor_asignaturas WHERE profesor_id=?",
+            (profesor_id,)
+        ).fetchall()
+    return [r["nombre_asig"] for r in rows]
+
 # Esto permite probar el archivo directamente desde la terminal
 if __name__ == "__main__":
     inicializar_db()
