@@ -11,6 +11,49 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import database as db
 
+def calcular_horas_por_profesor(datos):
+    """Suma las horas semanales totales asignadas a cada profesor, leyendo el texto de 'Horario Final'."""
+    horas_por_profesor = {}
+    for curso in datos:
+        profesor = curso.get("Profesor", "Sin asignar")
+        txt = curso.get("Horario Final", "")
+        if not txt or txt == "SIN HORARIO":
+            continue
+        minutos_totales = 0
+        for parte in txt.split(" y "):
+            parte  = parte.strip().lstrip(".")
+            tokens = parte.split()
+            if len(tokens) < 3:
+                continue
+            try:
+                ini = tokens[1].replace(":", "")
+                fin = tokens[-1].replace(":", "")
+                mi  = int(ini[:2]) * 60 + int(ini[2:])
+                mf  = int(fin[:2]) * 60 + int(fin[2:])
+                minutos_totales += (mf - mi)
+            except Exception:
+                pass
+        horas_por_profesor[profesor] = horas_por_profesor.get(profesor, 0) + minutos_totales / 60
+    return horas_por_profesor
+
+def renderizar_tabla_profesores(profesores_filtrados):
+    filas_html = ""
+    for p in profesores_filtrados:
+        if p["ramos_lista"]:
+            ramos_html = "".join(f"<span class='ramo-badge'>{r}</span>" for r in p["ramos_lista"])
+        else:
+            ramos_html = "<span style='color:#999;'>— sin ramos —</span>"
+        email = p.get("email") or "—"
+        filas_html += f"<tr><td>{p['rut']}</td><td>{p['nombre']}</td><td>{email}</td><td>{ramos_html}</td></tr>"
+
+    tabla_html = (
+        "<table class='tabla-profesores'>"
+        "<thead><tr><th>RUT</th><th>Nombre</th><th>Email</th><th>Ramos</th></tr></thead>"
+        f"<tbody>{filas_html}</tbody>"
+        "</table>"
+    )
+    st.markdown(f"<div class='tabla-profesores-contenedor'>{tabla_html}</div>", unsafe_allow_html=True)
+
 def render():
     st.title("🗂️ Panel del Secretario Académico")
 
@@ -340,6 +383,26 @@ def _tab_ver_editar():
         df.to_excel(nombre_archivo, index=False)
         st.success(f"Exportado como '{nombre_archivo}'")
 
+    # ── Carga horaria por profesor ───────────────────────────────────
+    st.divider()
+    st.subheader("⚖️ Carga horaria por profesor")
+
+    horas_max = st.slider("Horas semanales máximas recomendadas", 5, 40, 20)
+
+    horas_prof = calcular_horas_por_profesor(datos)
+    df_horas = pd.DataFrame([
+        {"Profesor": p, "Horas semanales": round(h, 1), "Sobrecargado": "⚠️" if h > horas_max else ""}
+        for p, h in sorted(horas_prof.items(), key=lambda x: x[1], reverse=True)
+    ])
+
+    st.dataframe(df_horas, use_container_width=True, height=300)
+
+    sobrecargados = [p for p, h in horas_prof.items() if h > horas_max]
+    if sobrecargados:
+        st.warning(f"⚠️ {len(sobrecargados)} profesor(es) superan las {horas_max}h semanales: {', '.join(sobrecargados)}")
+    else:
+        st.success(f"✅ Ningún profesor supera las {horas_max}h semanales.")
+
     # Edición manual de un NRC
     st.divider()
     st.subheader("✏️ Modificar horario de un NRC")
@@ -364,6 +427,53 @@ def _tab_ver_editar():
         else:
             st.warning("Completa el NRC y el nuevo horario.")
 
+    # ── Crear una nueva sección/paralelo manualmente ─────────────────
+    st.divider()
+    st.subheader("➕ Agregar nueva sección/paralelo")
+    st.caption("Crea un NRC nuevo a mano — útil para un paralelo extra que el algoritmo no generó.")
+
+    profesores_bd = db.obtener_profesores()
+    opciones_prof = {f"{p['rut']} — {p['nombre']}": p for p in profesores_bd}
+
+    with st.form("form_nueva_seccion"):
+        nuevo_nrc = st.number_input(
+            "NRC (debe ser único en este horario)",
+            min_value=1, step=1,
+            value=max([c["NRC"] for c in datos], default=90000) + 1
+        )
+        nueva_asig = st.text_input("Nombre de la asignatura")
+        sel_prof = st.selectbox("Profesor", list(opciones_prof.keys())) if opciones_prof else None
+        nueva_sala = st.text_input("Sala (deja vacío si es virtual)")
+        nuevo_sem = st.number_input("Semestre", min_value=1, max_value=10, step=1)
+        nueva_prioridad = st.selectbox("Prioridad", ["OBLIGATORIO", "ADELANTADO"])
+        nuevo_horario_txt = st.text_input(
+            "Horario (ej: .LU 0830 - 1010 y .JU 0830 - 1010)", value="SIN HORARIO"
+        )
+        crear_seccion = st.form_submit_button("➕ Crear sección", type="primary")
+
+    if crear_seccion:
+        if not nueva_asig or not sel_prof:
+            st.warning("Completa al menos la asignatura y el profesor.")
+        elif any(c["NRC"] == nuevo_nrc for c in datos):
+            st.error(f"El NRC {nuevo_nrc} ya existe en este horario. Usa otro número.")
+        else:
+            profe = opciones_prof[sel_prof]
+            curso_nuevo = {
+                "NRC": nuevo_nrc,
+                "Asignatura": nueva_asig,
+                "Profesor": profe["nombre"],
+                "RUT_Profesor": profe["rut"],
+                "Sala": nueva_sala,
+                "Semestre": nuevo_sem,
+                "Prioridad": nueva_prioridad,
+                "Horario Final": nuevo_horario_txt,
+            }
+            ok = db.agregar_curso_horario(horario_id, curso_nuevo)
+            if ok:
+                st.success(f"Sección NRC {nuevo_nrc} — {nueva_asig} agregada.")
+                st.rerun()
+            else:
+                st.error("No se pudo agregar la sección.")
 
 # ── Tab 3: Gestionar Profesores ────────────────────────────────────────
 def _tab_profesores():
@@ -374,46 +484,124 @@ def _tab_profesores():
     col1, col2 = st.columns([2, 1])
     with col1:
         if profesores:
-            df_prof = pd.DataFrame(profesores)[["rut", "nombre", "email"]]
-            st.dataframe(df_prof, use_container_width=True)
+            for p in profesores:
+                p["ramos_lista"] = db.obtener_asignaturas_profesor(p["id"])
+                p["ramos"] = ", ".join(p["ramos_lista"]) if p["ramos_lista"] else "— sin ramos asignados —"
+
+            todos_los_ramos = sorted({r for p in profesores for r in p["ramos_lista"]})
+
+            colf1, colf2, colf3 = st.columns(3)
+            with colf1:
+                buscar_prof = st.text_input("🔍 Buscar por nombre o RUT", key="buscar_profesor")
+            with colf2:
+                ramo_filtro = st.selectbox("Filtrar por ramo", ["Todos"] + todos_los_ramos, key="filtro_ramo")
+            with colf3:
+                solo_sin_ramos = st.checkbox("Solo sin ramos asignados", key="filtro_sin_ramos")
+
+            profesores_filtrados = profesores
+            if buscar_prof:
+                bp = buscar_prof.lower()
+                profesores_filtrados = [
+                    p for p in profesores_filtrados
+                    if bp in p["nombre"].lower() or bp in p["rut"].lower()
+                ]
+            if ramo_filtro != "Todos":
+                profesores_filtrados = [p for p in profesores_filtrados if ramo_filtro in p["ramos_lista"]]
+            if solo_sin_ramos:
+                profesores_filtrados = [p for p in profesores_filtrados if not p["ramos_lista"]]
+
+            if profesores_filtrados:
+                renderizar_tabla_profesores(profesores_filtrados)
+            else:
+                st.info("No hay profesores que coincidan con el filtro.")
+
+            st.caption(f"Mostrando {len(profesores_filtrados)} de {len(profesores)} profesores.")
         else:
             st.info("No hay profesores registrados aún.")
 
-    with col2:
-        st.markdown("**Agregar profesor manualmente**")
-        rut_n   = st.text_input("RUT", key="prof_rut")
-        nom_n   = st.text_input("Nombre", key="prof_nom")
-        email_n = st.text_input("Email (opcional)", key="prof_email")
-
-        if st.button("➕ Agregar"):
-            if rut_n and nom_n:
-                ok, _ = db.registrar_usuario(rut_n, rut_n, "profesor", nom_n)
-                usuario_prof = db.login(rut_n, rut_n)
-                uid = usuario_prof["id"] if usuario_prof else None
-                db.crear_profesor(uid, rut_n, nom_n, email_n)
-                st.success(f"Profesor '{nom_n}' agregado. Usuario: `{rut_n}`, Contraseña: `{rut_n}`")
-            else:
-                st.warning("Completa RUT y nombre.")
-
-    # Detectar ramos sin profesor
+    # ── Editar, eliminar y asignar ramos a un profesor ──────────────────
     st.divider()
-    if st.button("🔍 Detectar ramos sin profesor en el último horario"):
-        horarios = db.obtener_horarios()
-        if not horarios:
-            st.warning("Primero genera un horario.")
-            return
-        ultimo  = db.obtener_horario_por_id(horarios[0]["id"])
-        sin_rut = [
-            c for c in ultimo["datos"]
-            if not c.get("RUT_Profesor") or c.get("RUT_Profesor") == "nan"
-        ]
-        if sin_rut:
-            st.warning(f"{len(sin_rut)} cursos sin profesor asignado:")
-            for c in sin_rut:
-                st.write(f"  • NRC {c['NRC']} — {c['Asignatura']}")
-                db.crear_alerta("sin_profesor", f"NRC {c['NRC']} '{c['Asignatura']}' sin profesor.")
-        else:
-            st.success("Todos los cursos tienen profesor asignado.")
+    st.subheader("✏️ Editar, eliminar o asignar ramos a un profesor")
+
+    if profesores:
+        opciones_editar = {f"{p['rut']} — {p['nombre']}": p["id"] for p in profesores}
+        seleccion_editar = st.selectbox(
+            "Selecciona un profesor", list(opciones_editar.keys()), key="sel_editar_profesor"
+        )
+        prof_id_editar = opciones_editar[seleccion_editar]
+        prof_actual = next(p for p in profesores if p["id"] == prof_id_editar)
+
+        from malla import MALLA_ICF
+        ramos_malla    = sorted({r["nombre"] for r in MALLA_ICF})
+        ramos_actuales = db.obtener_asignaturas_profesor(prof_id_editar)
+        opciones_ramos = sorted(set(ramos_malla) | set(ramos_actuales))
+
+        with st.form(f"form_editar_{prof_id_editar}"):
+            rut_e   = st.text_input("RUT", value=prof_actual["rut"])
+            nom_e   = st.text_input("Nombre", value=prof_actual["nombre"])
+            email_e = st.text_input("Email", value=prof_actual.get("email") or "")
+            ramos_e = st.multiselect("Ramos que puede dictar", opciones_ramos, default=ramos_actuales)
+
+            col_g, col_e = st.columns(2)
+            with col_g:
+                guardar = st.form_submit_button("💾 Guardar cambios", type="primary")
+            with col_e:
+                eliminar = st.form_submit_button("🗑️ Eliminar profesor")
+
+        if guardar:
+            db.actualizar_profesor(prof_id_editar, rut_e, nom_e, email_e)
+
+            ramos_quitar  = set(ramos_actuales) - set(ramos_e)
+            ramos_agregar = set(ramos_e) - set(ramos_actuales)
+            for r in ramos_quitar:
+                db.quitar_asignatura_profesor(prof_id_editar, r)
+            for r in ramos_agregar:
+                db.asignar_asignatura_profesor(prof_id_editar, r)
+
+            st.success(f"Profesor '{nom_e}' actualizado.")
+            st.rerun()
+
+        if eliminar:
+            st.session_state["confirmar_eliminar_profesor"] = prof_id_editar
+
+        if st.session_state.get("confirmar_eliminar_profesor") == prof_id_editar:
+            st.warning(f"¿Seguro que quieres eliminar a **{prof_actual['nombre']}**? Esta acción no se puede deshacer.")
+            col_si, col_no = st.columns(2)
+            with col_si:
+                if st.button("Sí, eliminar", key=f"confirmar_si_{prof_id_editar}"):
+                    db.eliminar_profesor(prof_id_editar)
+                    del st.session_state["confirmar_eliminar_profesor"]
+                    st.success("Profesor eliminado.")
+                    st.rerun()
+            with col_no:
+                if st.button("Cancelar", key=f"confirmar_no_{prof_id_editar}"):
+                    del st.session_state["confirmar_eliminar_profesor"]
+                    st.rerun()
+
+        # Disponibilidad horaria declarada (solo lectura — la declara el propio profesor)
+        with st.expander("🗓️ Ver disponibilidad horaria declarada"):
+            disp = db.obtener_disponibilidad(prof_id_editar)
+            if not disp:
+                st.info("Este profesor aún no ha declarado su disponibilidad.")
+            else:
+                DIAS_D = ["LU", "MA", "MI", "JU", "VI", "SA"]
+                NOMBRE_DIA = {"LU": "Lunes", "MA": "Martes", "MI": "Miércoles",
+                              "JU": "Jueves", "VI": "Viernes", "SA": "Sábado"}
+                HORAS_D = [
+                    "08:30", "09:25", "10:20", "11:15", "12:10", "13:05",
+                    "14:00", "14:55", "15:50", "16:45", "17:40", "18:35",
+                    "19:30", "20:25"
+                ]
+                filas = []
+                for i, hora in enumerate(HORAS_D):
+                    fila = {"Hora": hora}
+                    for dia in DIAS_D:
+                        fila[NOMBRE_DIA[dia]] = "✅" if disp.get((dia, i + 1), True) else "—"
+                    filas.append(fila)
+                df_disp = pd.DataFrame(filas).set_index("Hora")
+                st.dataframe(df_disp, use_container_width=True)
+                bloques_disp = sum(1 for v in disp.values() if v)
+                st.caption(f"{bloques_disp} de {len(disp)} bloques declarados como disponibles.")
 
 
 # ── Tab 4: Alertas ─────────────────────────────────────────────────────

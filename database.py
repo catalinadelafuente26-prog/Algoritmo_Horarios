@@ -142,6 +142,12 @@ def login(username: str, password: str):
         ).fetchone()
     return dict(row) if row else None
 
+def obtener_usuario_por_id(usuario_id):
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM usuarios WHERE id=?", (usuario_id,)
+        ).fetchone()
+    return dict(row) if row else None
 
 def registrar_usuario(username, password, perfil, nombre):
     """Crea un usuario nuevo. Retorna (True, mensaje) o (False, error)."""
@@ -296,6 +302,19 @@ def actualizar_nrc_horario(horario_id, nrc, nuevo_horario_texto):
         )
     return True
 
+def agregar_curso_horario(horario_id, curso: dict):
+    """Agrega una sección/NRC nueva a un horario ya guardado."""
+    horario = obtener_horario_por_id(horario_id)
+    if not horario:
+        return False
+    datos = horario["datos"]
+    datos.append(curso)
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE horarios_generados SET datos_json=? WHERE id=?",
+            (json.dumps(datos, ensure_ascii=False), horario_id)
+        )
+    return True
 
 # ── Alertas ────────────────────────────────────────────────────────────
 
@@ -336,6 +355,29 @@ def obtener_asignaturas_profesor(profesor_id):
             (profesor_id,)
         ).fetchall()
     return [r["nombre_asig"] for r in rows]
+
+def quitar_asignatura_profesor(profesor_id, nombre_asig):
+    with get_connection() as conn:
+        conn.execute(
+            "DELETE FROM profesor_asignaturas WHERE profesor_id=? AND nombre_asig=?",
+            (profesor_id, nombre_asig)
+        )
+
+
+def actualizar_profesor(profesor_id, rut, nombre, email=""):
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE profesores SET rut=?, nombre=?, email=? WHERE id=?",
+            (rut, nombre, email, profesor_id)
+        )
+
+
+def eliminar_profesor(profesor_id):
+    """Elimina al profesor y todo lo que dependa de él (ramos, disponibilidad)."""
+    with get_connection() as conn:
+        conn.execute("DELETE FROM profesor_asignaturas WHERE profesor_id=?", (profesor_id,))
+        conn.execute("DELETE FROM disponibilidad_profesor WHERE profesor_id=?", (profesor_id,))
+        conn.execute("DELETE FROM profesores WHERE id=?", (profesor_id,))
 
 # Esto permite probar el archivo directamente desde la terminal
 if __name__ == "__main__":
