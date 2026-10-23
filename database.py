@@ -252,6 +252,52 @@ def obtener_ramos_aprobados(estudiante_id):
         ).fetchall()
     return [dict(r) for r in rows]
 
+def obtener_estudiantes_con_ramos():
+    """Devuelve [{id, semestre_actual, aprobados:[nombre_asig,...]}] de todos los estudiantes."""
+    with get_connection() as conn:
+        ests = conn.execute("SELECT id, semestre_actual FROM estudiantes").fetchall()
+        aprob = conn.execute("SELECT estudiante_id, nombre_asig FROM ramos_aprobados").fetchall()
+    mapa = {}
+    for a in aprob:
+        mapa.setdefault(a["estudiante_id"], []).append(a["nombre_asig"])
+    return [
+        {"id": e["id"], "semestre_actual": e["semestre_actual"], "aprobados": mapa.get(e["id"], [])}
+        for e in ests
+    ]
+def guardar_horario_estudiante(estudiante_id, horario_base_id, nrcs):
+    """Guarda (reemplazando el anterior) el horario personal de un estudiante."""
+    with get_connection() as conn:
+        conn.execute("DELETE FROM horario_estudiante WHERE estudiante_id=?", (estudiante_id,))
+        conn.execute(
+            "INSERT INTO horario_estudiante(estudiante_id, horario_base_id, nrcs_json) VALUES (?,?,?)",
+            (estudiante_id, horario_base_id, json.dumps(list(nrcs)))
+        )
+
+
+def obtener_horario_estudiante(estudiante_id):
+    """Devuelve {horario_base_id, fecha, nrcs} o None si no tiene horario guardado."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT horario_base_id, fecha, nrcs_json FROM horario_estudiante "
+            "WHERE estudiante_id=? ORDER BY id DESC LIMIT 1",
+            (estudiante_id,)
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "horario_base_id": row["horario_base_id"],
+        "fecha": row["fecha"],
+        "nrcs": json.loads(row["nrcs_json"]),
+    }
+
+def obtener_estudiantes():
+    """Lista básica de estudiantes que tienen usuario (para la vista del superusuario)."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, usuario_id, rut, nombre, semestre_actual "
+            "FROM estudiantes WHERE usuario_id IS NOT NULL ORDER BY nombre"
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 # ── Horarios ───────────────────────────────────────────────────────────
 

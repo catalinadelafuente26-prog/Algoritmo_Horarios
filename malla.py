@@ -11,7 +11,7 @@ MALLA_ICF = [
     {"codigo": "S2-01", "nombre": "CÁLCULO DIFERENCIAL",                          "semestre": 2,  "creditos": 7,  "horas_catedral": 4.5, "horas_ayudantia": 1.5, "horas_lab": 0.0,  "requisitos": ["INTRODUCCIÓN A LAS MATEMÁTICAS"]},
     {"codigo": "S2-02", "nombre": "FÍSICA EXPERIMENTAL",                          "semestre": 2,  "creditos": 7,  "horas_catedral": 3.0, "horas_ayudantia": 0.0, "horas_lab": 0.0,  "requisitos": ["INTRODUCCIÓN A LAS MATEMÁTICAS", "FÍSICA GENERAL"]},
     {"codigo": "S2-03", "nombre": "BASE DE DATOS",                                "semestre": 2,  "creditos": 7,  "horas_catedral": 0.0, "horas_ayudantia": 0.0, "horas_lab": 3.75, "requisitos": ["INTRODUCCIÓN A LA PROGRAMACIÓN"]},
-    {"codigo": "S2-04", "nombre": "QUIMICA Y AMBIENTE",                           "semestre": 2,  "creditos": 5,  "horas_catedral": 3.0, "horas_ayudantia": 0.0, "horas_lab": 0.0,  "requisitos": []},
+    {"codigo": "S2-04", "nombre": "QUIMICA Y AMBIENTE",                           "semestre": 2,  "creditos": 5,  "horas_catedral": 3.0, "horas_ayudantia": 0.0, "horas_lab": 0.0,  "requisitos": [], "oferta_anual": True},
     {"codigo": "S2-05", "nombre": "HABILIDADES COMUNICATIVAS",                    "semestre": 2,  "creditos": 4,  "horas_catedral": 0.0, "horas_ayudantia": 0.0, "horas_lab": 3.0,  "requisitos": []},
 
     # SEMESTRE 3
@@ -24,7 +24,7 @@ MALLA_ICF = [
     # SEMESTRE 4
     {"codigo": "S4-01", "nombre": "SISTEMAS Y ECUACIONES DIFERENCIALES LINEALES", "semestre": 4,  "creditos": 7,  "horas_catedral": 4.5, "horas_ayudantia": 1.5, "horas_lab": 0.0,  "requisitos": ["CÁLCULO INTEGRAL"]},
     {"codigo": "S4-02", "nombre": "ELECTRICIDAD Y MAGNETISMO",                    "semestre": 4,  "creditos": 6,  "horas_catedral": 3.0, "horas_ayudantia": 0.0, "horas_lab": 1.5,  "requisitos": ["CÁLCULO INTEGRAL", "MÉCANICA"]},
-    {"codigo": "S4-03", "nombre": "PRACTICA 1",                                   "semestre": 4,  "creditos": 7,  "horas_catedral": 1.5, "horas_ayudantia": 0.0, "horas_lab": 0.0,  "requisitos": ["CÁLCULO INTEGRAL", "MÉCANICA", "ALGORITMOS Y ESTRUCTURAS DE DATOS", "COMPLIANCE AND ACCOUNTABILITY", "TALLER DE INNOVACIÓN Y EMPRENDIMIENTO 1"]},
+    {"codigo": "S4-03", "nombre": "PRACTICA 1",                                   "semestre": 4,  "creditos": 7,  "horas_catedral": 1.5, "horas_ayudantia": 0.0, "horas_lab": 0.0,  "requisitos": ["CÁLCULO INTEGRAL", "MÉCANICA", "ALGORITMOS Y ESTRUCTURAS DE DATOS", "COMPLIANCE AND ACCOUNTABILITY", "TALLER DE INNOVACIÓN Y EMPRENDIMIENTO 1"], "oferta_anual": True},
     {"codigo": "S4-04", "nombre": "TALLER DE INNOVACIÓN Y EMPRENDIMIENTO 2",      "semestre": 4,  "creditos": 5,  "horas_catedral": 0.0, "horas_ayudantia": 0.0, "horas_lab": 0.0,  "requisitos": ["TALLER DE INNOVACIÓN Y EMPRENDIMIENTO 1"]},
     {"codigo": "S4-05", "nombre": "INGLES 1",                                     "semestre": 4,  "creditos": 5,  "horas_catedral": 4.5, "horas_ayudantia": 0.0, "horas_lab": 0.0,  "requisitos": []},
 
@@ -44,7 +44,7 @@ MALLA_ICF = [
 
     # SEMESTRE 7
     {"codigo": "S7-01", "nombre": "OPTIMIZACIÓN",                                 "semestre": 7,  "creditos": 6,  "horas_catedral": 3.0, "horas_ayudantia": 0.0, "horas_lab": 0.0,  "requisitos": ["ANALISIS Y DISEÑOS DE ALGORITMOS"]},
-    {"codigo": "S7-02", "nombre": "INGENIERÍA DE SOFTWARE 1",                     "semestre": 7,  "creditos": 7,  "horas_catedral": 0.0, "horas_ayudantia": 1.5, "horas_lab": 3.0,  "requisitos": ["PARADIGMAS DE PROGRAMACIÓN"]},
+    {"codigo": "S7-02", "nombre": "INGENIERÍA DE SOFTWARE 1",                     "semestre": 7,  "creditos": 7,  "horas_catedral": 0.0, "horas_ayudantia": 1.5, "horas_lab": 3.0,  "requisitos": ["PARADIGMAS DE PROGRAMACIÓN"], "oferta_anual": True},
     {"codigo": "S7-03", "nombre": "TALLER DE INNOVACIÓN Y EMPRENDIMIENTO 3",      "semestre": 7,  "creditos": 5,  "horas_catedral": 0.0, "horas_ayudantia": 0.0, "horas_lab": 3.0,  "requisitos": ["TALLER DE INNOVACIÓN Y EMPRENDIMIENTO 2"]},
     {"codigo": "S7-04", "nombre": "APRENDIZAJE DE MAQUINA",                       "semestre": 7,  "creditos": 7,  "horas_catedral": 3.0, "horas_ayudantia": 0.0, "horas_lab": 1.5,  "requisitos": ["FUNDAMENTOS DE INTELIGENCIA ARTIFICIAL"]},
     {"codigo": "S7-05", "nombre": "INGLES 4",                                     "semestre": 7,  "creditos": 5,  "horas_catedral": 4.5, "horas_ayudantia": 0.0, "horas_lab": 0.0,  "requisitos": ["INGLES 3"]},
@@ -52,7 +52,7 @@ MALLA_ICF = [
     # SEMESTRE 8
     {"codigo": "S8-01", "nombre": "GESTIÓN DE LA TRANSFORMACIÓN DIGITAL",         "semestre": 8,  "creditos": 5,  "horas_catedral": 3.0, "horas_ayudantia": 0.0, "horas_lab": 0.0,  "requisitos": ["COMPLIANCE AND ACCOUNTABILITY"]},
     {"codigo": "S8-02", "nombre": "CIBERSEGURIDAD",                               "semestre": 8,  "creditos": 6,  "horas_catedral": 0.75,"horas_ayudantia": 0.0, "horas_lab": 3.0,  "requisitos": ["INFRACTUCTURA TI"]},
-    {"codigo": "S8-03", "nombre": "INGENIERÍA DE SOFTWARE 2",                     "semestre": 8,  "creditos": 7,  "horas_catedral": 1.5, "horas_ayudantia": 0.0, "horas_lab": 3.0,  "requisitos": ["INGENIERÍA DE SOFTWARE 1", "DESARROLLO WEB Y MÓVIL"]},
+    {"codigo": "S8-03", "nombre": "INGENIERÍA DE SOFTWARE 2",                     "semestre": 8,  "creditos": 7,  "horas_catedral": 1.5, "horas_ayudantia": 0.0, "horas_lab": 3.0,  "requisitos": ["INGENIERÍA DE SOFTWARE 1", "DESARROLLO WEB Y MÓVIL"], "oferta_anual": True},
     {"codigo": "S8-04", "nombre": "SEMINARIO DE LICENCIATURA EN INGENIERIA",      "semestre": 8,  "creditos": 3,  "horas_catedral": 0.75,"horas_ayudantia": 0.0, "horas_lab": 0.75, "requisitos": ["FUNDAMENTOS DE INTELIGENCIA ARTIFICIAL", "INGENIERÍA DE SOFTWARE 1", "MINERÍA DE DATOS", "ELECTRICIDAD Y MAGNETISMO"]},
     {"codigo": "S8-05", "nombre": "TOPICOS DE ESPECIALIDAD 1",                    "semestre": 8,  "creditos": 6,  "horas_catedral": 0.0, "horas_ayudantia": 1.5, "horas_lab": 3.0,  "requisitos": ["FUNDAMENTOS DE INTELIGENCIA ARTIFICIAL"]},
     {"codigo": "S8-06", "nombre": "RESPONSABILIDAD SOCIAL",                       "semestre": 8,  "creditos": 3,  "horas_catedral": 0.0, "horas_ayudantia": 0.0, "horas_lab": 2.25, "requisitos": []},
@@ -67,7 +67,7 @@ MALLA_ICF = [
     # SEMESTRE 10
     {"codigo": "S10-01", "nombre": "TALLER DE TRANSFERENCIA TECNOLÓGICA",         "semestre": 10, "creditos": 5,  "horas_catedral": 4.5, "horas_ayudantia": 0.0, "horas_lab": 0.0,  "requisitos": ["ADMINISTRACIÓN FINANCIERA DE PROYECTOS I+D+I"]},
     {"codigo": "S10-02", "nombre": "PROYECTO DE TÍTULO",                          "semestre": 10, "creditos": 13, "horas_catedral": 0.0, "horas_ayudantia": 0.0, "horas_lab": 1.5,  "requisitos": ["PORTAFOLIO DE PROYECTOS"]},
-    {"codigo": "S10-03", "nombre": "PRACTICA 2",                                  "semestre": 10, "creditos": 12, "horas_catedral": 1.5, "horas_ayudantia": 0.0, "horas_lab": 0.0,  "requisitos": ["PRACTICA 1", "PORTAFOLIO DE PROYECTOS", "ADMINISTRACIÓN FINANCIERA DE PROYECTOS I+D+I", "CIENCIA DE DATOS", "TOPICOS DE ESPECIALIDAD 2", "TOPICOS DE ESPECIALIDAD 3"]},
+    {"codigo": "S10-03", "nombre": "PRACTICA 2",                                  "semestre": 10, "creditos": 12, "horas_catedral": 1.5, "horas_ayudantia": 0.0, "horas_lab": 0.0,  "requisitos": ["PRACTICA 1", "PORTAFOLIO DE PROYECTOS", "ADMINISTRACIÓN FINANCIERA DE PROYECTOS I+D+I", "CIENCIA DE DATOS", "TOPICOS DE ESPECIALIDAD 2", "TOPICOS DE ESPECIALIDAD 3"], "oferta_anual": True},
 ]
 
 def obtener_ramos_disponibles(semestre_actual: int, codigos_aprobados: list) -> dict:
@@ -106,6 +106,59 @@ def obtener_ramos_disponibles(semestre_actual: int, codigos_aprobados: list) -> 
         "adelantos":    adelantos,
     }
 
+
+def calcular_atraso_alumno(semestre_actual, codigos_aprobados, semestre_actual_es_impar=True, max_pendientes_por_semestre=2):
+    """
+    Compara lo que el alumno ya aprobó contra todo lo que debería tener
+    aprobado según su semestre_actual (nominal, el de su cohorte), y estima
+    cuánto podría atrasarle regularizarse, considerando que algunos ramos
+    solo se ofrecen una vez al año (campo 'oferta_anual').
+    Es una ESTIMACIÓN basada en supuestos declarados, no un cálculo
+    curricular oficial.
+    """
+    import math
+
+    aprobados = set(nombre.strip().upper() for nombre in codigos_aprobados)
+
+    atrasados_por_semestre = {}
+    ramos_anuales_atrasados = []
+
+    for ramo in MALLA_ICF:
+        if ramo["semestre"] >= semestre_actual:
+            continue
+        if ramo["nombre"].strip().upper() in aprobados:
+            continue
+        atrasados_por_semestre.setdefault(ramo["semestre"], []).append(ramo["nombre"])
+        if ramo.get("oferta_anual"):
+            ramos_anuales_atrasados.append(ramo)
+
+    total_atrasados = sum(len(v) for v in atrasados_por_semestre.values())
+
+    if total_atrasados == 0:
+        return {
+            "va_atrasado": False,
+            "total_atrasados": 0,
+            "atrasados_por_semestre": {},
+            "ramos_anuales_atrasados": [],
+            "semestres_estimados_atraso": 0,
+        }
+
+    pendientes_semestrales = total_atrasados - len(ramos_anuales_atrasados)
+    estimado_por_carga = math.ceil(pendientes_semestrales / max_pendientes_por_semestre) if pendientes_semestrales > 0 else 0
+
+    estimado_por_anuales = 0
+    for ramo in ramos_anuales_atrasados:
+        es_ramo_impar = (ramo["semestre"] % 2 == 1)
+        espera = 0 if (es_ramo_impar == semestre_actual_es_impar) else 1
+        estimado_por_anuales = max(estimado_por_anuales, espera + 1)
+
+    return {
+        "va_atrasado": True,
+        "total_atrasados": total_atrasados,
+        "atrasados_por_semestre": atrasados_por_semestre,
+        "ramos_anuales_atrasados": [r["nombre"] for r in ramos_anuales_atrasados],
+        "semestres_estimados_atraso": max(estimado_por_carga, estimado_por_anuales),
+    }
 
 # Permite probar este archivo directamente desde la terminal
 if __name__ == "__main__":

@@ -9,14 +9,16 @@ import extra_streamlit_components as stx
 from datetime import datetime, timedelta
 import base64
 
+SUPERUSUARIOS = {"admin"}
+
 # ── Configuración general de la página ────────────────────────────────
 st.set_page_config(
     page_title="Planificación Académica UNAB",
-    page_icon="🎓",
+    page_icon="logo_unab.png",
     layout="wide",
 )
 
-# ── Inicializar la base de datos al arrancar ───────────────────────────
+# ── Estilos institucionales UNAB ───────────────────────────────────────
 st.markdown("""
 <style>
 h1 {
@@ -91,6 +93,12 @@ def obtener_cookie_manager():
 
 cookie_manager = obtener_cookie_manager()
 
+@st.cache_resource
+def _iniciar_bd():
+    db.inicializar_db()
+
+_iniciar_bd()
+
 # ── Estado de sesión ───────────────────────────────────────────────────
 # Streamlit guarda variables entre interacciones usando session_state.
 # Aquí guardamos el usuario que inició sesión.
@@ -116,9 +124,9 @@ def pantalla_login():
 
     st.markdown("""
     <div style='text-align:center; padding: 2rem 0 1rem 0'>
-        <h1>🎓 Sistema de Planificación Académica</h1>
-        <h3 style='color:#666'>Facultad de Ingeniería — Universidad Andrés Bello</h3>
-        <p style='color:#999'>Ingeniería Civil Informática</p>
+        <h1>Sistema de Planificación Académica</h1>
+        <h3 style='color:#B8C4D0'>Facultad de Ingeniería — Universidad Andrés Bello</h3>
+        <p style='color:#8A97A6'>Ingeniería Civil Informática</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -132,7 +140,7 @@ def pantalla_login():
         with st.form("form_login"):
             username  = st.text_input("Usuario")
             password  = st.text_input("Contraseña", type="password")
-            submitted = st.form_submit_button("Ingresar", use_container_width=True)
+            submitted = st.form_submit_button("Ingresar", width="stretch")
 
             if submitted:
                 usuario = db.login(username, password)
@@ -155,12 +163,16 @@ def pantalla_login():
         st.caption("Solo para profesores y estudiantes. El secretario es creado por administración.")
 
         with st.form("form_registro"):
-            nuevo_nombre  = st.text_input("Nombre completo")
-            nuevo_usuario = st.text_input("Usuario (usa tu RUT sin puntos ni guión)")
-            nuevo_pass    = st.text_input("Contraseña", type="password", key="reg_pass1")
-            nuevo_pass2   = st.text_input("Repetir contraseña", type="password", key="reg_pass2")
-            nuevo_perfil  = st.selectbox("Perfil", ["estudiante", "profesor"])
-            reg_submitted = st.form_submit_button("Crear cuenta", use_container_width=True)
+            nuevo_nombre   = st.text_input("Nombre completo")
+            nuevo_usuario  = st.text_input("Usuario (usa tu RUT sin puntos ni guión)")
+            nuevo_pass     = st.text_input("Contraseña", type="password", key="reg_pass1")
+            nuevo_pass2    = st.text_input("Repetir contraseña", type="password", key="reg_pass2")
+            nuevo_perfil   = st.selectbox("Perfil", ["estudiante", "profesor"])
+            nuevo_semestre = st.number_input(
+                "Semestre actual (solo si te registras como estudiante)",
+                min_value=1, max_value=10, step=1, value=1
+            )
+            reg_submitted  = st.form_submit_button("Crear cuenta", width="stretch")
 
             if reg_submitted:
                 if not nuevo_nombre or not nuevo_usuario or not nuevo_pass:
@@ -174,41 +186,26 @@ def pantalla_login():
                         nuevo_usuario, nuevo_pass, nuevo_perfil, nuevo_nombre
                     )
                     if ok:
-                        st.success(f"Cuenta creada. Ya puedes iniciar sesión.")
-                        # Si es profesor, crear su perfil automáticamente
-                        if nuevo_perfil == "profesor":
-                            usuario_nuevo = db.login(nuevo_usuario, nuevo_pass)
-                            if usuario_nuevo:
+                        st.success("Cuenta creada. Ya puedes iniciar sesión.")
+                        usuario_nuevo = db.login(nuevo_usuario, nuevo_pass)
+                        if usuario_nuevo:
+                            if nuevo_perfil == "profesor":
                                 db.crear_profesor(
                                     usuario_nuevo["id"], nuevo_usuario, nuevo_nombre
                                 )
+                            elif nuevo_perfil == "estudiante":
+                                db.crear_estudiante(
+                                    usuario_nuevo["id"], nuevo_usuario, nuevo_nombre, nuevo_semestre
+                                )
                     else:
                         st.error(mensaje)
-
-        # ── Credenciales de demostración ───────────────────────────────
-        with st.expander("🔑 Credenciales de prueba"):
-            st.markdown("""
-            | Perfil | Usuario | Contraseña |
-            |--------|---------|-----------|
-            | Secretario | `secretario` | `admin123` |
-            | Profesor | crear cuenta | la que elijas |
-            | Estudiante | crear cuenta | la que elijas |
-            """)
-
 
 # ── Barra lateral cuando hay sesión activa ────────────────────────────
 def mostrar_sidebar():
     usuario = st.session_state["usuario"]
 
-    iconos = {
-        "secretario": "🗂️",
-        "profesor":   "👨‍🏫",
-        "estudiante": "🎓",
-    }
-    icono = iconos.get(usuario["perfil"], "👤")
-
     with st.sidebar:
-        st.markdown(f"### {icono} {usuario['nombre']}")
+        st.markdown(f"### {usuario['nombre']}")
         st.caption(f"Perfil: **{usuario['perfil'].title()}**")
         st.divider()
 
@@ -216,29 +213,29 @@ def mostrar_sidebar():
         if usuario["perfil"] == "secretario":
             st.markdown("""
             **Funciones disponibles:**
-            - 📅 Generar programación académica
-            - 🔍 Ver y editar horarios
-            - 👨‍🏫 Gestionar profesores
-            - 🔔 Revisar alertas
+            - Generar programación académica
+            - Ver y editar horarios
+            - Gestionar profesores
+            - Revisar alertas
             """)
         elif usuario["perfil"] == "profesor":
             st.markdown("""
             **Funciones disponibles:**
-            - 📋 Ver mis clases asignadas
-            - 🗓️ Configurar mi disponibilidad
+            - Ver mis clases asignadas
+            - Configurar mi disponibilidad
             """)
         elif usuario["perfil"] == "estudiante":
             st.markdown("""
             **Funciones disponibles:**
-            - 📚 Ver mi malla curricular
-            - ✅ Registrar ramos aprobados
-            - 🗓️ Generar mi horario personal
-            - 👁️ Ver mi horario
+            - Ver mi malla curricular
+            - Registrar ramos aprobados
+            - Generar mi horario personal
+            - Ver mi horario
             """)
 
         st.divider()
 
-        if st.button("🚪 Cerrar sesión", use_container_width=True):
+        if st.button("Cerrar sesión", width="stretch"):
             st.session_state["usuario"] = None
             cookie_manager.set(
                 "usuario_id",
@@ -247,6 +244,49 @@ def mostrar_sidebar():
                 key="delete_cookie_logout"
             )
             st.rerun()
+
+def _render_superusuario():
+    """Vista del superusuario: secretario por defecto, o cualquier profesor/estudiante."""
+    with st.sidebar:
+        st.divider()
+        st.markdown("**Modo superusuario**")
+        vista = st.radio("Ver el sistema como", ["Secretario", "Profesor", "Estudiante"], key="su_vista")
+
+        objetivo = None
+        if vista == "Profesor":
+            profs = [p for p in db.obtener_profesores() if p.get("usuario_id")]
+            opciones = {f"{p['nombre']} ({p['rut']})": p for p in profs}
+            if opciones:
+                sel = st.selectbox("Profesor", list(opciones.keys()), key="su_prof")
+                objetivo = db.obtener_usuario_por_id(opciones[sel]["usuario_id"])
+        elif vista == "Estudiante":
+            ests = db.obtener_estudiantes()
+            opciones = {f"{e['nombre']} ({e['rut']})": e for e in ests}
+            if opciones:
+                sel = st.selectbox("Estudiante (puedes escribir para buscar)", list(opciones.keys()), key="su_est")
+                objetivo = db.obtener_usuario_por_id(opciones[sel]["usuario_id"])
+
+    if vista == "Secretario":
+        from paneles import secretario
+        secretario.render()
+        return
+
+    if objetivo is None:
+        st.info("No hay usuarios de este tipo para mostrar.")
+        return
+
+    st.caption(f"Vista como: {objetivo['nombre']}")
+    original = st.session_state["usuario"]
+    st.session_state["usuario"] = objetivo
+    try:
+        if vista == "Profesor":
+            from paneles import profesor
+            profesor.render()
+        else:
+            from paneles import estudiante
+            estudiante.render()
+    finally:
+        st.session_state["usuario"] = original
 
 # ── Enrutador principal ────────────────────────────────────────────────
 def main():
@@ -260,19 +300,22 @@ def main():
             key="refresh_cookie_activity"
         )
         mostrar_sidebar()
-        perfil = st.session_state["usuario"]["perfil"]
+        usuario = st.session_state["usuario"]
+        perfil = usuario["perfil"]
 
-        # Por ahora mostramos un mensaje temporal hasta crear cada panel
-        if perfil == "secretario":
+        if usuario["username"] in SUPERUSUARIOS:
+            _render_superusuario()
+        elif perfil == "secretario":
             from paneles import secretario
             secretario.render()
         elif perfil == "profesor":
             from paneles import profesor
             profesor.render()
         elif perfil == "estudiante":
-            st.title("🎓 Panel del Estudiante")
-            st.info("Panel en construcción — próximo paso.")
+            from paneles import estudiante
+            estudiante.render()
 
 
 if __name__ == "__main__":
     main()
+    

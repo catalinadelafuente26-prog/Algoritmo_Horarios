@@ -1,5 +1,5 @@
 """
-pages/profesor.py
+paneles/profesor.py
 Panel del Profesor.
 Funciones: ver clases asignadas y configurar disponibilidad horaria.
 """
@@ -22,7 +22,7 @@ HORAS_TEXTO = [
 
 def render():
     usuario = st.session_state["usuario"]
-    st.title(f"👨‍🏫 Panel del Profesor — {usuario['nombre']}")
+    st.title(f"Panel del Profesor — {usuario['nombre']}")
 
     # Buscar el perfil de profesor en la base de datos
     profesor = db.obtener_profesor_por_rut(usuario["username"])
@@ -31,7 +31,7 @@ def render():
         st.warning("Tu perfil de profesor no está configurado aún. Contacta al secretario académico.")
         return
 
-    tabs = st.tabs(["📋 Mis Clases", "🗓️ Mi Disponibilidad"])
+    tabs = st.tabs(["Mis Clases", "Mi Disponibilidad"])
 
     with tabs[0]:
         _tab_clases(profesor)
@@ -67,7 +67,7 @@ def _tab_clases(profesor):
     st.success(f"Tienes **{len(mis_cursos)} sección(es)** asignadas.")
 
     df = pd.DataFrame(mis_cursos)[["NRC", "Asignatura", "Sala", "Semestre", "Horario Final"]]
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df, width="stretch")
 
     # Vista semanal
     st.subheader("Vista semanal")
@@ -110,7 +110,7 @@ def _mostrar_grilla(cursos):
     df_grilla          = pd.DataFrame(grilla, index=HORAS_TEXTO)
     df_grilla.index.name = "Hora"
     df_grilla.columns  = [DIAS_NOMBRE[d] for d in DIAS]
-    st.dataframe(df_grilla, use_container_width=True)
+    st.dataframe(df_grilla, width="stretch")
 
 
 # ── Tab 2: Mi Disponibilidad ───────────────────────────────────────────
@@ -134,10 +134,10 @@ def _tab_disponibilidad(profesor):
                 val     = st.checkbox(hora, value=default, key=f"disp_{dia}_{i}")
                 nueva_disp[clave] = val
 
-    if st.button("💾 Guardar disponibilidad", type="primary"):
+    if st.button("Guardar disponibilidad", type="primary"):
         db.guardar_disponibilidad(profesor["id"], nueva_disp)
         disponibles = sum(1 for v in nueva_disp.values() if v)
         st.success(f"Disponibilidad guardada. {disponibles} bloques disponibles de 84 posibles.")
 
         if disponibles < 10:
-            st.warning("⚠️ Tienes muy pocos bloques disponibles. Puede ser difícil asignarte cursos.")
+            st.warning("Tienes muy pocos bloques disponibles. Puede ser difícil asignarte cursos.")

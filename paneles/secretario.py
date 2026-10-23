@@ -1,5 +1,5 @@
 """
-pages/secretario.py
+paneles/secretario.py
 Panel del Secretario Académico.
 Funciones: generar horario, ver y editar, gestionar profesores, alertas.
 iniciar con streamlit run app.py 
@@ -10,6 +10,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import database as db
+import demanda
 
 def calcular_horas_por_profesor(datos):
     """Suma las horas semanales totales asignadas a cada profesor, leyendo el texto de 'Horario Final'."""
@@ -55,22 +56,25 @@ def renderizar_tabla_profesores(profesores_filtrados):
     st.markdown(f"<div class='tabla-profesores-contenedor'>{tabla_html}</div>", unsafe_allow_html=True)
 
 def render():
-    st.title("🗂️ Panel del Secretario Académico")
+    st.title("Panel del Secretario Académico")
 
     tabs = st.tabs([
-        "📅 Generar Horario",
-        "🔍 Ver y Editar Horario",
-        "👨‍🏫 Gestionar Profesores",
-        "🔔 Alertas",
+        "Generar Horario",
+        "Demanda Estudiantil",
+        "Ver y Editar Horario",
+        "Gestionar Profesores",
+        "Alertas",
     ])
 
     with tabs[0]:
         _tab_generar()
     with tabs[1]:
-        _tab_ver_editar()
+        _tab_demanda()
     with tabs[2]:
-        _tab_profesores()
+        _tab_ver_editar()
     with tabs[3]:
+        _tab_profesores()
+    with tabs[4]:
         _tab_alertas()
 
 
@@ -95,28 +99,36 @@ def _tab_generar():
 
     modo = st.radio(
         "¿Qué datos usar para generar el horario?",
-        ["📄 Desde Excel existente", "📚 Desde Malla Curricular (generar desde cero)"],
+        ["Desde Excel existente", "Desde Malla Curricular (generar desde cero)"],
         horizontal=True
     )
 
-    if st.button("🚀 Ejecutar Optimizador", type="primary"):
+    usar_demanda = False
+    if modo.startswith("Desde Malla"):
+        usar_demanda = st.checkbox(
+            "Generar secciones según la demanda de estudiantes",
+            value=True,
+            help="Si se desactiva, se crea una sola sección por componente."
+        )
+        d1, d2, d3 = st.columns(3)
+        with d1:
+            periodo_gen = st.radio("Período", ["Primer semestre", "Segundo semestre"], key="gen_periodo")
+        with d2:
+            gen_cupo_g = st.number_input("Cupo cátedra / ayudantía", 10, 200, 50, 5, key="gen_cupo_g")
+        with d3:
+            gen_cupo_l = st.number_input("Cupo laboratorio", 10, 100, 30, 5, key="gen_cupo_l")
+
+    if st.button("Ejecutar Optimizador", type="primary"):
         # Verificar que el archivo existe
         if not os.path.exists(ruta_excel):
             st.error(f"No se encontró el archivo '{ruta_excel}'. Verifica que esté en la carpeta del proyecto.")
             return
 
-        # Importar el motor GA
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "algoritmo",
-            os.path.join(os.path.dirname(os.path.dirname(__file__)), "algoritmo_horarios.py")
-        )
-
         import main as ga
         ga.cursos_reales.clear()
         ga.profesores_reales.clear()
 
-        if modo == "📄 Desde Excel existente":
+        if modo == "Desde Excel existente":
             # Modo original — leer desde el Excel
             with st.spinner("Cargando datos desde Excel..."):
                 ga.cargar_datos_desde_excel(ruta_excel)
@@ -124,12 +136,21 @@ def _tab_generar():
             if not ga.cursos_reales:
                 st.error("No se pudieron cargar cursos. Revisa el archivo Excel.")
                 return
-            st.success(f"✓ {len(ga.cursos_reales)} cursos cargados desde Excel.")
+            st.success(f"{len(ga.cursos_reales)} cursos cargados desde Excel.")
 
         else:
             # Modo malla — generar cursos desde malla.py con profesores de la BD
             with st.spinner("Generando cursos desde la malla curricular..."):
                 from malla import MALLA_ICF
+
+                mapa_secc = None
+                if usar_demanda:
+                    res_dem = demanda.calcular_demanda(periodo_gen == "Primer semestre")
+                    if res_dem["total_estudiantes"] > 0:
+                        filas_dem = demanda.calcular_secciones(
+                            res_dem["demanda"], res_dem["adelantos"], gen_cupo_g, gen_cupo_l
+                        )
+                        mapa_secc = demanda.secciones_por_ramo(filas_dem)
 
                 profesores_bd = db.obtener_profesores()
                 if not profesores_bd:
@@ -205,43 +226,56 @@ def _tab_generar():
                         chunks = calcular_chunks_componente(horas, tipo)
                         total_bloques = sum(chunks)
 
-                        # Asignar el siguiente profesor habilitado en rotación
-                        profe = next(rotacion_por_ramo[nombre_ramo])
-                        rut   = str(profe["rut"]).strip()
-                        nom   = str(profe["nombre"]).strip()
+                        if mapa_secc is not None:
+                            n_secc = mapa_secc.get(nombre_ramo, {}).get(
+                                {"catedral": "catedral", "ayudantia": "ayudantia", "lab": "lab"}[tipo], 0
+                            )
+                        else:
+                            n_secc = 1
 
-                        curso = ga.Curso(
-                            nrc_contador,
-                            nombre_comp,
-                            rut,
-                            nom,
-                            f"VIRTUAL_{nrc_contador}",
-                            ramo["semestre"],
-                            "OBLIGATORIO",
-                            []
-                        )
-                        curso.duracion_requerida = total_bloques
-                        curso.un_solo_dia = (tipo in ("lab", "ayudantia"))
+                        for k in range(n_secc):
+                            profe = next(rotacion_por_ramo[nombre_ramo])
+                            rut   = str(profe["rut"]).strip()
+                            nom   = str(profe["nombre"]).strip()
 
-                        if rut not in ga.profesores_reales:
-                            ga.profesores_reales[rut] = ga.Profesor(rut, nom)
+                            curso = ga.Curso(
+                                nrc_contador,
+                                nombre_comp,
+                                rut,
+                                nom,
+                                f"VIRTUAL_{nrc_contador}",
+                                ramo["semestre"],
+                                "OBLIGATORIO",
+                                []
+                            )
+                            curso.duracion_requerida = total_bloques
+                            curso.un_solo_dia = (tipo in ("lab", "ayudantia"))
+                            curso.grupo = k + 1
+                            if rut not in ga.profesores_reales:
+                                prof_ga = ga.Profesor(rut, nom)
+                                # Reemplaza la disponibilidad simulada por la real declarada en la BD
+                                prof_ga.bloques_no_disponibles = set()
+                                disp_real = db.obtener_disponibilidad(profe["id"])
+                                for (dia, bloque), libre in disp_real.items():
+                                    if not libre and dia in ga.DIAS_MAPA:
+                                        prof_ga.bloques_no_disponibles.add(
+                                            ga.DIAS_MAPA[dia] * ga.BLOQUES_POR_DIA + (bloque - 1)
+                                        )
+                                ga.profesores_reales[rut] = prof_ga
 
-                        ga.cursos_reales[nrc_contador] = curso
-                        nrc_contador += 1
-                        cursos_generados += 1
+                            ga.cursos_reales[nrc_contador] = curso
+                            nrc_contador += 1
+                            cursos_generados += 1
 
             if ramos_sin_profesor:
-                st.warning(f"⚠️ {len(ramos_sin_profesor)} ramo(s) sin profesor habilitado (se usó fallback): {', '.join(ramos_sin_profesor)}")
+                st.warning(f"{len(ramos_sin_profesor)} ramo(s) sin profesor habilitado (se usó fallback): {', '.join(ramos_sin_profesor)}")
 
-            st.success(f"✓ {cursos_generados} componentes generados desde la malla curricular con profesores habilitados.")
-
-            st.success(f"✓ {cursos_generados} componentes generados desde la malla curricular.")
+            st.success(f"{cursos_generados} componentes generados desde la malla curricular con profesores habilitados.")
 
         # Barra de progreso
         progress = st.progress(0)
         log_area  = st.empty()
         logs      = []
-        resultados = {"mejor_fit": None, "datos": None}
 
         # Ejecutar el GA con los parámetros elegidos
         ga.GENERACIONES     = generaciones
@@ -332,13 +366,57 @@ def _tab_generar():
             datos_salida
         )
 
+        # Alertas automáticas de sobrecarga (más de 20 h semanales)
+        horas_gen = calcular_horas_por_profesor(datos_salida)
+        sobrecargados_gen = {p: h for p, h in horas_gen.items() if h > 20}
+        for p, h in sobrecargados_gen.items():
+            db.crear_alerta(
+                "sobrecarga",
+                f"{p} tiene {h:.1f} h semanales asignadas en '{nombre_horario}' (máximo recomendado: 20 h)."
+            )
+        if sobrecargados_gen:
+            st.warning(f"{len(sobrecargados_gen)} profesor(es) superan las 20 h semanales. Revisa la pestaña Alertas.")
+
         if mejor_fit == 0:
-            st.success(f"✅ Horario generado sin conflictos. Guardado como '{nombre_horario}'.")
+            st.success(f"Horario generado sin conflictos. Guardado como '{nombre_horario}'.")
         else:
-            st.warning(f"⚠️ Fitness final: {mejor_fit}. Se guardó el mejor resultado encontrado.")
+            st.warning(f"Fitness final: {mejor_fit}. Se guardó el mejor resultado encontrado.")
 
         st.session_state["horario_activo_id"] = horario_id
 
+# ── Tab: Demanda Estudiantil ───────────────────────────────────────────
+def _tab_demanda():
+    st.subheader("Demanda estudiantil y secciones necesarias")
+    st.caption("Se calcula con el semestre y los ramos aprobados de cada estudiante cargado.")
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        periodo = st.radio("Período a programar", ["Primer semestre", "Segundo semestre"], key="dem_periodo")
+    with c2:
+        cupo_general = st.number_input("Cupo cátedra / ayudantía", 10, 200, 50, 5, key="dem_cupo_g")
+    with c3:
+        cupo_lab = st.number_input("Cupo laboratorio", 10, 100, 30, 5, key="dem_cupo_l")
+
+    res = demanda.calcular_demanda(periodo == "Primer semestre")
+    if res["total_estudiantes"] == 0:
+        st.info("No hay estudiantes cargados. Ejecuta importar_estudiantes.py.")
+        return
+
+    filas = demanda.calcular_secciones(res["demanda"], res["adelantos"], cupo_general, cupo_lab)
+    df = pd.DataFrame(filas)
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Estudiantes", res["total_estudiantes"])
+    m2.metric("Ramos con demanda", len(df))
+    m3.metric("NRC necesarios", int(df["Total NRC"].sum()))
+
+    st.dataframe(df, width="stretch", hide_index=True)
+
+    if res["no_ofrecido"]:
+        st.warning(
+            "Ramos anuales que no se ofrecen en este período (alumnos que deben esperar): "
+            + ", ".join(f"{n} ({c} alumnos)" for n, c in res["no_ofrecido"].items())
+        )
 
 # ── Tab 2: Ver y Editar Horario ────────────────────────────────────────
 def _tab_ver_editar():
@@ -375,37 +453,37 @@ def _tab_ver_editar():
         )
         df_filtro = df_filtro[mask]
 
-    st.dataframe(df_filtro, use_container_width=True, height=400)
+    st.dataframe(df_filtro, width="stretch", height=400)
     st.caption(f"Mostrando {len(df_filtro)} de {len(df)} cursos.")
 
-    if st.button("📥 Exportar a Excel"):
+    if st.button("Exportar a Excel"):
         nombre_archivo = f"horario_{horario_id}.xlsx"
         df.to_excel(nombre_archivo, index=False)
         st.success(f"Exportado como '{nombre_archivo}'")
 
     # ── Carga horaria por profesor ───────────────────────────────────
     st.divider()
-    st.subheader("⚖️ Carga horaria por profesor")
+    st.subheader("Carga horaria por profesor")
 
     horas_max = st.slider("Horas semanales máximas recomendadas", 5, 40, 20)
 
     horas_prof = calcular_horas_por_profesor(datos)
     df_horas = pd.DataFrame([
-        {"Profesor": p, "Horas semanales": round(h, 1), "Sobrecargado": "⚠️" if h > horas_max else ""}
+        {"Profesor": p, "Horas semanales": round(h, 1), "Sobrecargado": "Sí" if h > horas_max else ""}
         for p, h in sorted(horas_prof.items(), key=lambda x: x[1], reverse=True)
     ])
 
-    st.dataframe(df_horas, use_container_width=True, height=300)
+    st.dataframe(df_horas, width="stretch", height=300)
 
     sobrecargados = [p for p, h in horas_prof.items() if h > horas_max]
     if sobrecargados:
-        st.warning(f"⚠️ {len(sobrecargados)} profesor(es) superan las {horas_max}h semanales: {', '.join(sobrecargados)}")
+        st.warning(f"{len(sobrecargados)} profesor(es) superan las {horas_max}h semanales: {', '.join(sobrecargados)}")
     else:
-        st.success(f"✅ Ningún profesor supera las {horas_max}h semanales.")
+        st.success(f"Ningún profesor supera las {horas_max}h semanales.")
 
     # Edición manual de un NRC
     st.divider()
-    st.subheader("✏️ Modificar horario de un NRC")
+    st.subheader("Modificar horario de un NRC")
     nrc_edit      = st.number_input("NRC a modificar", min_value=0, step=1)
     nuevo_horario = st.text_input("Nuevo horario (ej: .LU 0830 - 1010 y .JU 0830 - 1010)")
 
@@ -416,7 +494,7 @@ def _tab_ver_editar():
         else:
             st.warning("NRC no encontrado en este horario.")
 
-    if st.button("💾 Guardar modificación"):
+    if st.button("Guardar modificación"):
         if nrc_edit and nuevo_horario:
             ok = db.actualizar_nrc_horario(horario_id, nrc_edit, nuevo_horario)
             if ok:
@@ -429,7 +507,7 @@ def _tab_ver_editar():
 
     # ── Crear una nueva sección/paralelo manualmente ─────────────────
     st.divider()
-    st.subheader("➕ Agregar nueva sección/paralelo")
+    st.subheader("Agregar nueva sección/paralelo")
     st.caption("Crea un NRC nuevo a mano — útil para un paralelo extra que el algoritmo no generó.")
 
     profesores_bd = db.obtener_profesores()
@@ -449,7 +527,7 @@ def _tab_ver_editar():
         nuevo_horario_txt = st.text_input(
             "Horario (ej: .LU 0830 - 1010 y .JU 0830 - 1010)", value="SIN HORARIO"
         )
-        crear_seccion = st.form_submit_button("➕ Crear sección", type="primary")
+        crear_seccion = st.form_submit_button("Crear sección", type="primary")
 
     if crear_seccion:
         if not nueva_asig or not sel_prof:
@@ -492,7 +570,7 @@ def _tab_profesores():
 
             colf1, colf2, colf3 = st.columns(3)
             with colf1:
-                buscar_prof = st.text_input("🔍 Buscar por nombre o RUT", key="buscar_profesor")
+                buscar_prof = st.text_input("Buscar por nombre o RUT", key="buscar_profesor")
             with colf2:
                 ramo_filtro = st.selectbox("Filtrar por ramo", ["Todos"] + todos_los_ramos, key="filtro_ramo")
             with colf3:
@@ -521,7 +599,7 @@ def _tab_profesores():
 
     # ── Editar, eliminar y asignar ramos a un profesor ──────────────────
     st.divider()
-    st.subheader("✏️ Editar, eliminar o asignar ramos a un profesor")
+    st.subheader("Editar, eliminar o asignar ramos a un profesor")
 
     if profesores:
         opciones_editar = {f"{p['rut']} — {p['nombre']}": p["id"] for p in profesores}
@@ -544,9 +622,9 @@ def _tab_profesores():
 
             col_g, col_e = st.columns(2)
             with col_g:
-                guardar = st.form_submit_button("💾 Guardar cambios", type="primary")
+                guardar = st.form_submit_button("Guardar cambios", type="primary")
             with col_e:
-                eliminar = st.form_submit_button("🗑️ Eliminar profesor")
+                eliminar = st.form_submit_button("Eliminar profesor")
 
         if guardar:
             db.actualizar_profesor(prof_id_editar, rut_e, nom_e, email_e)
@@ -579,7 +657,7 @@ def _tab_profesores():
                     st.rerun()
 
         # Disponibilidad horaria declarada (solo lectura — la declara el propio profesor)
-        with st.expander("🗓️ Ver disponibilidad horaria declarada"):
+        with st.expander("Ver disponibilidad horaria declarada"):
             disp = db.obtener_disponibilidad(prof_id_editar)
             if not disp:
                 st.info("Este profesor aún no ha declarado su disponibilidad.")
@@ -596,10 +674,10 @@ def _tab_profesores():
                 for i, hora in enumerate(HORAS_D):
                     fila = {"Hora": hora}
                     for dia in DIAS_D:
-                        fila[NOMBRE_DIA[dia]] = "✅" if disp.get((dia, i + 1), True) else "—"
+                        fila[NOMBRE_DIA[dia]] = "Sí" if disp.get((dia, i + 1), True) else "—"
                     filas.append(fila)
                 df_disp = pd.DataFrame(filas).set_index("Hora")
-                st.dataframe(df_disp, use_container_width=True)
+                st.dataframe(df_disp, width="stretch")
                 bloques_disp = sum(1 for v in disp.values() if v)
                 st.caption(f"{bloques_disp} de {len(disp)} bloques declarados como disponibles.")
 
@@ -611,7 +689,7 @@ def _tab_alertas():
     alertas = db.obtener_alertas(solo_pendientes=True)
 
     if not alertas:
-        st.success("✅ No hay alertas pendientes.")
+        st.success("No hay alertas pendientes.")
         return
 
     st.warning(f"{len(alertas)} alerta(s) pendiente(s)")
@@ -619,11 +697,10 @@ def _tab_alertas():
     for alerta in alertas:
         col1, col2 = st.columns([5, 1])
         with col1:
-            icono = {"sin_profesor": "🔴"}.get(alerta["tipo"], "⚠️")
-            st.write(f"{icono} {alerta['mensaje']}")
+            st.write(f"**{alerta['tipo'].replace('_', ' ').capitalize()}:** {alerta['mensaje']}")
             st.caption(f"Generada: {alerta['fecha'][:16]}")
         with col2:
-            if st.button("✓ Resolver", key=f"alerta_{alerta['id']}"):
+            if st.button("Resolver", key=f"alerta_{alerta['id']}"):
                 db.resolver_alerta(alerta["id"])
                 st.rerun()
         st.divider()

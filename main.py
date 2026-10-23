@@ -77,6 +77,7 @@ class Curso:
         self.duracion_requerida = len(self.bloques_enteros) if self.bloques_enteros else 2
 
         self.un_solo_dia = False  # True para labs y ayudantías
+        self.grupo = 0            # grupo de sección: solo choca con cursos del mismo grupo
 
 class Profesor:
     def __init__(self, rut, nombre):
@@ -279,16 +280,17 @@ def obtener_conflictos_y_fitness(lista_cursos: dict) -> tuple[int, set, dict]:
 
             # Choque de malla: revisamos si hay algún otro ramo del semestre adyacente
             # (±1 semestre para cubrir a alumnos adelantados o atrasados)
+            # Solo cuentan los cursos del mismo grupo de sección.
             if c.semestre > 0:
                 r_malla.setdefault(b, [])
-                for s_occ, tipo_occ, nom_occ in r_malla[b]:
-                    if abs(c.semestre - s_occ) <= 1 and c.nombre != nom_occ:
+                for s_occ, tipo_occ, nom_occ, g_occ in r_malla[b]:
+                    if abs(c.semestre - s_occ) <= 1 and c.nombre != nom_occ and c.grupo == g_occ:
                         if c.tipo_inscripcion == "OBLIGATORIO" and tipo_occ == "OBLIGATORIO":
                             c_duro += PESO_MALLA_DURO
                             nrcs_malos.add(nrc)
                         else:
                             c_malla_blanda += PESO_MALLA_BLANDO
-                r_malla[b].append((c.semestre, c.tipo_inscripcion, c.nombre))
+                r_malla[b].append((c.semestre, c.tipo_inscripcion, c.nombre, c.grupo))
 
             # Disponibilidad del profe: simplemente revisamos si ese bloque está bloqueado
             prof = profesores_reales.get(c.rut_profesor)
@@ -313,8 +315,7 @@ def obtener_conflictos_y_fitness(lista_cursos: dict) -> tuple[int, set, dict]:
         if c.semestre > 0:
             for b in c.bloques_enteros:
                 dia, blq = divmod(b, BLOQUES_POR_DIA)
-                horarios_semestre.setdefault(c.semestre, {}).setdefault(dia, set()).add(blq)
-
+                horarios_semestre.setdefault((c.semestre, c.grupo), {}).setdefault(dia, set()).add(blq)
     for sem, dias in horarios_semestre.items():
         for dia, blqs in dias.items():
             if len(blqs) > 1:
@@ -385,7 +386,7 @@ def mutacion_inteligente_dirigida(horario: dict, nrcs_malos: set, prob: float) -
                 o_prof.add((c.rut_profesor, b))
                 o_sala.add((c.sala, b))
                 if c.semestre > 0:
-                    o_malla.setdefault(b, []).append((c.semestre, c.nombre))
+                    o_malla.setdefault(b, []).append((c.semestre, c.nombre, c.grupo))
 
     for nrc in objetivos:
         if nrc not in h_mutado or random.random() >= prob:
@@ -438,8 +439,8 @@ def mutacion_inteligente_dirigida(horario: dict, nrcs_malos: set, prob: float) -
                     if c.semestre > 0:
                         for b in ventana:
                             if b in o_malla:
-                                for s_occ, nom_occ in o_malla[b]:
-                                    if abs(c.semestre - s_occ) <= 1 and nom_occ != c.nombre:
+                                for s_occ, nom_occ, g_occ in o_malla[b]:
+                                    if abs(c.semestre - s_occ) <= 1 and nom_occ != c.nombre and g_occ == c.grupo:
                                         conflicto_malla = True
                                         break
                             if conflicto_malla:
