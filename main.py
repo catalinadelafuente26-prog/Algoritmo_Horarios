@@ -18,6 +18,7 @@ PESO_MALLA_DURO     = 500   # dos ramos obligatorios del mismo semestre no puede
 PESO_MALLA_BLANDO   = 50    # tope de malla cuando el alumno va adelantado
 PESO_DISPONIBILIDAD = 100   # el profe tiene ese día ocupado
 PESO_VENTANAS       = 20    # hora libre en medio de clases (ej: clase a las 8, nada hasta las 12)
+PESO_DIA_NO_PERMITIDO = 1000  # curso programado en un día que no le corresponde (ej: sábado)
 
 # -----------------------------------------------------------------------
 # ESTRUCTURA DE TIEMPO
@@ -78,6 +79,7 @@ class Curso:
 
         self.un_solo_dia = False  # True para labs y ayudantías
         self.grupo = 0            # grupo de sección: solo choca con cursos del mismo grupo
+        self.dias_permitidos = [0, 1, 2, 3, 4, 5]  # 0=LU ... 5=SA; se restringe desde el panel
 
 class Profesor:
     def __init__(self, rut, nombre):
@@ -91,6 +93,10 @@ class Profesor:
         for d in dias_ocupados:
             for b in range(BLOQUES_POR_DIA):
                 self.bloques_no_disponibles.add((d * BLOQUES_POR_DIA) + b)
+
+def dia_permitido(curso, bloque: int) -> bool:
+    # True si el bloque cae en un día en que este curso puede dictarse
+    return (bloque // BLOQUES_POR_DIA) in curso.dias_permitidos
 
 # Se llenan cuando se llama a cargar_datos_desde_excel()
 profesores_reales: dict = {}
@@ -227,16 +233,18 @@ def calcular_chunks(duracion_requerida: int) -> list[int]:
             temp -= 1
     return chunks
 
-def generar_bloques_al_azar(duracion_requerida: int, un_solo_dia: bool = False) -> list[int]:
+def generar_bloques_al_azar(duracion_requerida: int, un_solo_dia: bool = False, dias_permitidos=None) -> list[int]:
+    dias = list(dias_permitidos) if dias_permitidos else list(range(6))
+
     if un_solo_dia:
         # Todo en un mismo día de corrido
-        dia       = random.randint(0, 5)
+        dia       = random.choice(dias)
         block_max = BLOQUES_POR_DIA - duracion_requerida
         inicio    = random.randint(0, max(0, block_max))
         return [(dia * BLOQUES_POR_DIA) + inicio + i for i in range(duracion_requerida)]
 
     chunks        = calcular_chunks(duracion_requerida)
-    dias_elegidos = random.sample(range(6), min(len(chunks), 6))
+    dias_elegidos = random.sample(dias, min(len(chunks), len(dias)))
     bloques       = []
 
     for dia, size in zip(dias_elegidos, chunks):
@@ -261,6 +269,11 @@ def obtener_conflictos_y_fitness(lista_cursos: dict) -> tuple[int, set, dict]:
 
     for nrc, c in lista_cursos.items():
         for b in c.bloques_enteros:
+
+            # Día no permitido para este curso (ej: sábado reservado)
+            if not dia_permitido(c, b):
+                c_duro += PESO_DIA_NO_PERMITIDO
+                nrcs_malos.add(nrc)
 
             # Choque de profe: si ya hay otro curso con este profe en este bloque
             r_prof.setdefault(b, {})
@@ -362,6 +375,8 @@ def swap_par_a_par(horario: dict, nrcs_malos: set) -> dict:
         candidatos = [
             n for n in libres
             if len(h_swap[n].bloques_enteros) == len(c_malo.bloques_enteros) and n != nrc_malo
+            and all(dia_permitido(c_malo, b) for b in h_swap[n].bloques_enteros)
+            and all(dia_permitido(h_swap[n], b) for b in c_malo.bloques_enteros)
         ]
         if candidatos:
             socio = random.choice(candidatos)
@@ -395,7 +410,7 @@ def mutacion_inteligente_dirigida(horario: dict, nrcs_malos: set, prob: float) -
         c      = h_mutado[nrc]
         chunks = calcular_chunks(c.duracion_requerida)
 
-        dias_disponibles = list(range(6))
+        dias_disponibles = list(c.dias_permitidos)
         random.shuffle(dias_disponibles)
 
         # Si el curso debe ir en un solo día, forzamos 1 solo chunk
@@ -469,7 +484,9 @@ def mutacion_inteligente_dirigida(horario: dict, nrcs_malos: set, prob: float) -
         else:
             # Si no encontramos espacio, hacemos un swap de emergencia con algún otro curso
             socio = random.choice(list(h_mutado.keys()))
-            if socio != nrc and len(h_mutado[socio].bloques_enteros) == len(c.bloques_enteros):
+            if (socio != nrc and len(h_mutado[socio].bloques_enteros) == len(c.bloques_enteros)
+                    and all(dia_permitido(c, b) for b in h_mutado[socio].bloques_enteros)
+                    and all(dia_permitido(h_mutado[socio], b) for b in c.bloques_enteros)):
                 c.bloques_enteros, h_mutado[socio].bloques_enteros = (
                     h_mutado[socio].bloques_enteros, c.bloques_enteros
                 )
@@ -483,7 +500,7 @@ def mutacion_inteligente_dirigida(horario: dict, nrcs_malos: set, prob: float) -
 def crear_individuo() -> dict:
     ind = copy.deepcopy(cursos_reales)
     for c in ind.values():
-        c.bloques_enteros = generar_bloques_al_azar(c.duracion_requerida, c.un_solo_dia)
+        c.bloques_enteros = generar_bloques_al_azar(c.duracion_requerida, c.un_solo_dia, c.dias_permitidos)
     return ind
 
 # -----------------------------------------------------------------------

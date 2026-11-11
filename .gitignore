@@ -1,5 +1,16 @@
+@"
+tesis_planificacion.db
+tesis_planificacion_REAL.db
+tesis_planificacion_ANON.db
+*.db-journal
+datos_varas.xlsx
+horario_roles_auditado.xlsx
+horario_*.xlsx
+ANTUNAB_*.xlsx
 __pycache__/
 *.pyc
 .venv/
-horario_*.xlsx
-tesis_planificacion.db
+venv/
+.env
+.streamlit/secrets.toml
+"@ | Set-Content -Encoding utf8 .gitignore

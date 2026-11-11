@@ -8,9 +8,13 @@ import streamlit as st
 import pandas as pd
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
 import database as db
 import demanda
+
+from datetime import datetime
+
+# Ramos que pueden programarse en sábado (según la programación real de la sede)
+RAMOS_CON_SABADO = {"PORTAFOLIO DE PROYECTOS", "PROYECTO DE TÍTULO"}
 
 def calcular_horas_por_profesor(datos):
     """Suma las horas semanales totales asignadas a cada profesor, leyendo el texto de 'Horario Final'."""
@@ -95,12 +99,15 @@ def _tab_generar():
     with col2:
         poblacion = st.slider("Tamaño de población", 20, 100, 80, 10)
 
-    nombre_horario = st.text_input("Nombre para identificar este horario", value="Semestre 2026-20")
-
     modo = st.radio(
         "¿Qué datos usar para generar el horario?",
         ["Desde Excel existente", "Desde Malla Curricular (generar desde cero)"],
         horizontal=True
+    )
+
+    periodo_gen = st.radio(
+        "Período a programar", ["Primer semestre", "Segundo semestre"],
+        horizontal=True, key="gen_periodo"
     )
 
     usar_demanda = False
@@ -110,13 +117,18 @@ def _tab_generar():
             value=True,
             help="Si se desactiva, se crea una sola sección por componente."
         )
-        d1, d2, d3 = st.columns(3)
-        with d1:
-            periodo_gen = st.radio("Período", ["Primer semestre", "Segundo semestre"], key="gen_periodo")
+        d2, d3 = st.columns(2)
         with d2:
             gen_cupo_g = st.number_input("Cupo cátedra / ayudantía", 10, 200, 50, 5, key="gen_cupo_g")
         with d3:
             gen_cupo_l = st.number_input("Cupo laboratorio", 10, 100, 30, 5, key="gen_cupo_l")
+
+    # Nombre automático: ANTUNAB_AAAA10 (primer semestre) o ANTUNAB_AAAA20 (segundo semestre)
+    sufijo = "10" if periodo_gen == "Primer semestre" else "20"
+    nombre_horario = st.text_input(
+        "Nombre para identificar este horario",
+        value=f"ANTUNAB_{datetime.now().year}{sufijo}"
+    )
 
     if st.button("Ejecutar Optimizador", type="primary"):
         # Verificar que el archivo existe
@@ -251,6 +263,8 @@ def _tab_generar():
                             curso.duracion_requerida = total_bloques
                             curso.un_solo_dia = (tipo in ("lab", "ayudantia"))
                             curso.grupo = k + 1
+                            if nombre_ramo not in RAMOS_CON_SABADO:
+                                curso.dias_permitidos = [0, 1, 2, 3, 4]
                             if rut not in ga.profesores_reales:
                                 prof_ga = ga.Profesor(rut, nom)
                                 # Reemplaza la disponibilidad simulada por la real declarada en la BD
@@ -457,7 +471,11 @@ def _tab_ver_editar():
     st.caption(f"Mostrando {len(df_filtro)} de {len(df)} cursos.")
 
     if st.button("Exportar a Excel"):
-        nombre_archivo = f"horario_{horario_id}.xlsx"
+        nombre_guardado = next(h["nombre"] for h in horarios if h["id"] == horario_id)
+        base = "".join(ch for ch in nombre_guardado if ch.isalnum() or ch in "_-") or f"horario_{horario_id}"
+        nombre_archivo = f"{base}.xlsx"
+        if os.path.exists(nombre_archivo):
+            nombre_archivo = f"{base}_{horario_id}.xlsx"
         df.to_excel(nombre_archivo, index=False)
         st.success(f"Exportado como '{nombre_archivo}'")
 

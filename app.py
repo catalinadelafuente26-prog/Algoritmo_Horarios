@@ -204,13 +204,18 @@ def pantalla_login():
 def mostrar_sidebar():
     usuario = st.session_state["usuario"]
 
+    # El superusuario ve el menú según la vista elegida en "Ver el sistema como"
+    perfil_mostrado = usuario["perfil"]
+    if usuario["username"] in SUPERUSUARIOS:
+        perfil_mostrado = st.session_state.get("su_vista", "Secretario").lower()
+
     with st.sidebar:
         st.markdown(f"### {usuario['nombre']}")
-        st.caption(f"Perfil: **{usuario['perfil'].title()}**")
+        st.caption(f"Perfil: **{perfil_mostrado.title()}**")
         st.divider()
 
         # Descripción de funciones según perfil
-        if usuario["perfil"] == "secretario":
+        if perfil_mostrado == "secretario":
             st.markdown("""
             **Funciones disponibles:**
             - Generar programación académica
@@ -218,13 +223,13 @@ def mostrar_sidebar():
             - Gestionar profesores
             - Revisar alertas
             """)
-        elif usuario["perfil"] == "profesor":
+        elif perfil_mostrado == "profesor":
             st.markdown("""
             **Funciones disponibles:**
             - Ver mis clases asignadas
             - Configurar mi disponibilidad
             """)
-        elif usuario["perfil"] == "estudiante":
+        elif perfil_mostrado == "estudiante":
             st.markdown("""
             **Funciones disponibles:**
             - Ver mi malla curricular
